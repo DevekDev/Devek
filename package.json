@@ -21,6 +21,24 @@
   "main": "./dist/extension.js",
   "icon": "logo.png",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devek-sidebar",
+          "title": "Devek.dev",
+          "icon": "logo.png"
+        }
+      ]
+    },
+    "views": {
+      "devek-sidebar": [
+        {
+          "type": "webview",
+          "id": "devekViewContainer",
+          "name": "Devek.dev"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "devek.login",

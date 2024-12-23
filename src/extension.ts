@@ -21,7 +21,54 @@ interface WebSocketMessage {
 export function activate(context: vscode.ExtensionContext) {
     console.log('Devek.dev is now active!');
 
-    // Initialize status bar item
+    // Create and register view container
+    class DevekViewProvider implements vscode.WebviewViewProvider {
+        public static readonly viewType = 'devekViewContainer';
+
+        resolveWebviewView(
+            webviewView: vscode.WebviewView,
+            _context: vscode.WebviewViewResolveContext,
+            _token: vscode.CancellationToken,
+        ): void | Thenable<void> {
+            webviewView.webview.options = {
+                enableScripts: true,
+                localResourceRoots: []
+            };
+
+            // If logged in, show app, otherwise show login
+            if (authToken) {
+                webviewView.webview.html = getAppHtml();
+            } else {
+                webviewView.webview.html = getLoginHtml();
+            }
+
+            // Handle messages from the webview
+            webviewView.webview.onDidReceiveMessage(async message => {
+                switch (message.command) {
+                    case 'login':
+                        const success = await handleLoginAttempt(context, message.email, message.password);
+                        if (success) {
+                            webviewView.webview.html = getAppHtml();
+                        } else {
+                            webviewView.webview.postMessage({ 
+                                type: 'error', 
+                                message: 'Invalid email or password' 
+                            });
+                        }
+                        break;
+                    case 'register':
+                        vscode.env.openExternal(vscode.Uri.parse('https://app.devek.dev/'));
+                        break;
+                }
+            });
+        }
+    }
+
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(DevekViewProvider.viewType, new DevekViewProvider())
+    );
+
+    // Rest of your existing activate function...
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     context.subscriptions.push(statusBarItem);
 
@@ -31,7 +78,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('devek.logout', () => handleLogout(context)),
         vscode.commands.registerCommand('devek.reconnect', () => connectToWebSocket(context)),
         vscode.commands.registerCommand('devek.showMenu', showMenu),
-        vscode.commands.registerCommand('devek.showApp', () => showAppWebview(context)) // New command
+        vscode.commands.registerCommand('devek.showApp', () => showAppWebview(context))
     );
 
     // Load saved token from storage
@@ -40,18 +87,45 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize connection
     if (authToken) {
         connectToWebSocket(context);
-        showAppWebview(context); // Show app on startup if logged in
     } else {
         updateStatusBar('disconnected');
         showLoginPrompt();
     }
 }
 
+
+function getAppHtml() {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body, html {
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                    height: 100vh;
+                    overflow: hidden;
+                }
+                iframe {
+                    width: 100%;
+                    height: 100vh;
+                    border: none;
+                }
+            </style>
+        </head>
+        <body>
+            <iframe src="https://app.devek.dev" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+        </body>
+        </html>
+    `;
+}
+
 function showLoginWebview(context: vscode.ExtensionContext) {
     const panel = vscode.window.createWebviewPanel(
         'devekLogin',
         'Devek.dev Login',
-        vscode.ViewColumn.One,
+        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
         {
             enableScripts: true,
             retainContextWhenHidden: true
@@ -239,14 +313,13 @@ function showAppWebview(_context: vscode.ExtensionContext) {
     const panel = vscode.window.createWebviewPanel(
         'devekApp',
         'Devek.dev',
-        vscode.ViewColumn.One,
+        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
         {
             enableScripts: true,
             retainContextWhenHidden: true
         }
     );
 
-    // Set the webview's HTML content to load app.devek.dev
     panel.webview.html = `
         <!DOCTYPE html>
         <html>
