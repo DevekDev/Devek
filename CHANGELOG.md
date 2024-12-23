@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.9] - 2024-12-23
+### Changed
+- Improved UX by moving login and app views to sidebar panel instead of separate windows
+- Standardized the view width and appearance
+- Enhanced navigation between different views
+
 ## [0.0.8] - 2024-12-10
 ### Added
 - Open-source release of Devek.dev

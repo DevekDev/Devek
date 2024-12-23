@@ -1,3 +1,5 @@
+import { StatusBarStatesConfig } from './types';
+
 /**
  * VSCode WebView Settings
  */
@@ -71,7 +73,7 @@ export const STATUS_BAR_CONFIG = {
             tooltip: 'Initializing Devek.dev...',
             command: undefined
         }
-    }
+    } as StatusBarStatesConfig
 };
 
 /**

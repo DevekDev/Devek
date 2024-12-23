@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import WebSocket from 'ws';
+import { StatusBarState } from './types';
 import { 
     WEBVIEW_SETTINGS, 
     WEBSOCKET_CONFIG, 
@@ -23,6 +24,8 @@ interface WebSocketMessage {
     status?: string;
     message?: string;
 }
+
+type StatusType = 'connected' | 'connecting' | 'disconnected' | 'error' | 'initializing';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Devek.dev is now active!');
@@ -468,8 +471,9 @@ function showConnectionStatus() {
     });
 }
 
-function updateStatusBar(status: 'connected' | 'connecting' | 'disconnected' | 'error' | 'initializing') {
-    const currentStatus = STATUS_BAR_CONFIG.STATES[status.toUpperCase()];
+function updateStatusBar(status: StatusType) {
+    const stateKey = status.toUpperCase() as StatusBarState;
+    const currentStatus = STATUS_BAR_CONFIG.STATES[stateKey];
     statusBarItem.text = currentStatus.text;
     statusBarItem.tooltip = currentStatus.tooltip;
     statusBarItem.command = currentStatus.command;

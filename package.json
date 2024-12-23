@@ -3,7 +3,7 @@
   "displayName": "Devek.dev",
   "publisher": "devek-dev",
   "description": "Optimize Your Development Productivity Effortlessly",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "engines": {
     "vscode": "^1.70.0"
   },
