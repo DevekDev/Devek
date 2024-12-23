@@ -1,14 +1,20 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import WebSocket from 'ws';
+import { 
+    WEBVIEW_SETTINGS, 
+    WEBSOCKET_CONFIG, 
+    URLS, 
+    STORAGE_KEYS, 
+    STATUS_BAR_CONFIG,
+    COMMANDS 
+} from './constants';
 
 let ws: WebSocket | null = null;
 let authToken: string | null = null;
 let statusBarItem: vscode.StatusBarItem;
 let reconnectAttempts = 0;
 let pingInterval: any;
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_INTERVAL = 5000;
 
 interface WebSocketMessage {
     type: string;
@@ -23,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Create and register view container
     class DevekViewProvider implements vscode.WebviewViewProvider {
-        public static readonly viewType = 'devekViewContainer';
+        public static readonly viewType = WEBVIEW_SETTINGS.IDENTIFIERS.VIEW_CONTAINER;
 
         resolveWebviewView(
             webviewView: vscode.WebviewView,
@@ -57,7 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
                         }
                         break;
                     case 'register':
-                        vscode.env.openExternal(vscode.Uri.parse('https://app.devek.dev/'));
+                        vscode.env.openExternal(vscode.Uri.parse(URLS.APP));
                         break;
                 }
             });
@@ -68,21 +74,22 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.registerWebviewViewProvider(DevekViewProvider.viewType, new DevekViewProvider())
     );
 
-    // Rest of your existing activate function...
-    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarItem = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Right, 
+        STATUS_BAR_CONFIG.ALIGNMENT_PRIORITY
+    );
     context.subscriptions.push(statusBarItem);
 
-    // Register commands
     context.subscriptions.push(
-        vscode.commands.registerCommand('devek.login', () => showLoginWebview(context)),
-        vscode.commands.registerCommand('devek.logout', () => handleLogout(context)),
-        vscode.commands.registerCommand('devek.reconnect', () => connectToWebSocket(context)),
-        vscode.commands.registerCommand('devek.showMenu', showMenu),
-        vscode.commands.registerCommand('devek.showApp', () => showAppWebview(context))
+        vscode.commands.registerCommand(COMMANDS.LOGIN, showView),  // Just use showView here
+        vscode.commands.registerCommand(COMMANDS.LOGOUT, () => handleLogout(context)),
+        vscode.commands.registerCommand(COMMANDS.RECONNECT, () => connectToWebSocket(context)),
+        vscode.commands.registerCommand(COMMANDS.SHOW_MENU, showMenu),
+        vscode.commands.registerCommand(COMMANDS.SHOW_APP, showView)
     );
 
     // Load saved token from storage
-    authToken = context.globalState.get('devekAuthToken') || null;
+    authToken = context.globalState.get(STORAGE_KEYS.AUTH_TOKEN) || null;
     
     // Initialize connection
     if (authToken) {
@@ -93,93 +100,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
-
-function getAppHtml() {
-    return `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body, html {
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                    height: 100vh;
-                    overflow: hidden;
-                }
-                iframe {
-                    width: 100%;
-                    height: 100vh;
-                    border: none;
-                }
-            </style>
-        </head>
-        <body>
-            <iframe src="https://app.devek.dev" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-        </body>
-        </html>
-    `;
-}
-
-function showLoginWebview(context: vscode.ExtensionContext) {
-    const panel = vscode.window.createWebviewPanel(
-        'devekLogin',
-        'Devek.dev Login',
-        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-        {
-            enableScripts: true,
-            retainContextWhenHidden: true
-        }
-    );
-
-    let loginInProgress = false;
-
-    panel.webview.html = getLoginHtml();
-
-    panel.webview.onDidReceiveMessage(
-        async message => {
-            switch (message.command) {
-                case 'login':
-                    if (loginInProgress) { 
-                        return;
-                    };
-                    loginInProgress = true;
-
-                    try {
-                        const success = await handleLoginAttempt(context, message.email, message.password);
-                        if (success) {
-                            panel.dispose();
-                            showAppWebview(context); // Show app after successful login
-                        } else {
-                            panel.webview.postMessage({ 
-                                type: 'error', 
-                                message: 'Invalid email or password' 
-                            });
-                        }
-                    } catch (error) {
-                        panel.webview.postMessage({ 
-                            type: 'error', 
-                            message: 'Failed to connect to server' 
-                        });
-                    } finally {
-                        loginInProgress = false;
-                    }
-                    break;
-                case 'register':
-                    vscode.env.openExternal(vscode.Uri.parse('https://app.devek.dev/'));
-                    break;
-            }
-        },
-        undefined,
-        context.subscriptions
-    );
-}
-
 function getLoginHtml() {
     return `
         <!DOCTYPE html>
         <html>
         <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
                     padding: 20px;
@@ -188,20 +114,31 @@ function getLoginHtml() {
                     background-color: var(--vscode-editor-background);
                 }
                 .container {
-                    max-width: 400px;
+                    width: ${WEBVIEW_SETTINGS.COLUMN_WIDTH}px;
                     margin: 0 auto;
                 }
+                form {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                }
                 .form-group {
-                    margin-bottom: 15px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
                 }
                 input {
                     width: 100%;
                     padding: 8px;
-                    margin-top: 5px;
                     background-color: var(--vscode-input-background);
                     color: var(--vscode-input-foreground);
                     border: 1px solid var(--vscode-input-border);
                     border-radius: 4px;
+                    box-sizing: border-box;
+                }
+                input:focus {
+                    outline: 2px solid var(--vscode-focusBorder);
+                    border-color: transparent;
                 }
                 button {
                     background-color: var(--vscode-button-background);
@@ -211,8 +148,9 @@ function getLoginHtml() {
                     border-radius: 4px;
                     cursor: pointer;
                     width: 100%;
+                    transition: background-color 0.2s;
                 }
-                button:hover {
+                button:hover:not(:disabled) {
                     background-color: var(--vscode-button-hoverBackground);
                 }
                 button:disabled {
@@ -246,27 +184,46 @@ function getLoginHtml() {
         <body>
             <div class="container">
                 <h2>Login to Devek.dev</h2>
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
-                </div>
-                <div class="error" id="error-message"></div>
-                <button id="loginButton" onclick="login()">Login</button>
+                <form id="loginForm" onsubmit="handleSubmit(event)">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            required 
+                            autocomplete="email"
+                            spellcheck="false"
+                            autocapitalize="off"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+                    <div class="error" id="error-message"></div>
+                    <button type="submit" id="loginButton">Login</button>
+                </form>
                 <div class="register-link">
                     Not yet registered? <a href="#" onclick="register()">Register here</a>
                 </div>
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
+                const form = document.getElementById('loginForm');
                 const button = document.getElementById('loginButton');
                 const errorElement = document.getElementById('error-message');
                 
-                function login() {
-                    const email = document.getElementById('email').value;
+                function handleSubmit(event) {
+                    event.preventDefault();
+                    
+                    const email = document.getElementById('email').value.trim();
                     const password = document.getElementById('password').value;
                     
                     if (!email || !password) {
@@ -296,6 +253,9 @@ function getLoginHtml() {
                     button.disabled = false;
                 }
 
+                // Focus email field on load
+                document.getElementById('email').focus();
+
                 window.addEventListener('message', event => {
                     const message = event.data;
                     if (message.type === 'error') {
@@ -308,27 +268,77 @@ function getLoginHtml() {
     `;
 }
 
-
-function showAppWebview(_context: vscode.ExtensionContext) {
+function showLoginWebview(context: vscode.ExtensionContext) {
     const panel = vscode.window.createWebviewPanel(
-        'devekApp',
-        'Devek.dev',
-        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+        WEBVIEW_SETTINGS.IDENTIFIERS.LOGIN,
+        WEBVIEW_SETTINGS.TITLES.LOGIN,
+        { 
+            viewColumn: vscode.ViewColumn.Active, 
+            preserveFocus: true 
+        },
         {
             enableScripts: true,
             retainContextWhenHidden: true
         }
     );
 
-    panel.webview.html = `
+    // Set editor group width
+    vscode.commands.executeCommand('workbench.action.setEditorLayoutVirtualWidth', WEBVIEW_SETTINGS.COLUMN_WIDTH);
+
+    let loginInProgress = false;
+
+    panel.webview.html = getLoginHtml();
+
+    panel.webview.onDidReceiveMessage(
+        async message => {
+            switch (message.command) {
+                case 'login':
+                    if (loginInProgress) { 
+                        return;
+                    };
+                    loginInProgress = true;
+
+                    try {
+                        const success = await handleLoginAttempt(context, message.email, message.password);
+                        if (success) {
+                            panel.dispose();
+                            showAppWebview(context);
+                        } else {
+                            panel.webview.postMessage({ 
+                                type: 'error', 
+                                message: 'Invalid email or password' 
+                            });
+                        }
+                    } catch (error) {
+                        panel.webview.postMessage({ 
+                            type: 'error', 
+                            message: 'Failed to connect to server' 
+                        });
+                    } finally {
+                        loginInProgress = false;
+                    }
+                    break;
+                case 'register':
+                    vscode.env.openExternal(vscode.Uri.parse(URLS.APP));
+                    break;
+            }
+        },
+        undefined,
+        context.subscriptions
+    );
+}
+
+function getAppHtml() {
+    return `
         <!DOCTYPE html>
         <html>
         <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body, html {
                     margin: 0;
                     padding: 0;
-                    width: 100%;
+                    width: ${WEBVIEW_SETTINGS.COLUMN_WIDTH}px;
                     height: 100vh;
                     overflow: hidden;
                 }
@@ -340,10 +350,30 @@ function showAppWebview(_context: vscode.ExtensionContext) {
             </style>
         </head>
         <body>
-            <iframe src="https://app.devek.dev" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+            <iframe src="${URLS.APP}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
         </body>
         </html>
     `;
+}
+
+function showAppWebview(_context: vscode.ExtensionContext) {
+    const panel = vscode.window.createWebviewPanel(
+        WEBVIEW_SETTINGS.IDENTIFIERS.APP,
+        WEBVIEW_SETTINGS.TITLES.APP,
+        { 
+            viewColumn: vscode.ViewColumn.Active,
+            preserveFocus: true 
+        },
+        {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        }
+    );
+
+    // Set editor group width
+    vscode.commands.executeCommand('workbench.action.setEditorLayoutVirtualWidth', WEBVIEW_SETTINGS.COLUMN_WIDTH);
+
+    panel.webview.html = getAppHtml();
 }
 
 function handleLoginAttempt(context: vscode.ExtensionContext, email: string, password: string): Promise<boolean> {
@@ -354,7 +384,7 @@ function handleLoginAttempt(context: vscode.ExtensionContext, email: string, pas
             resolve(false);
             vscode.window.showErrorMessage('Login attempt timed out');
             updateStatusBar('disconnected');
-        }, 10000);
+        }, WEBSOCKET_CONFIG.TIMEOUT);
 
         connectToWebSocket(context, { type: 'login', data: { email, password } }, (success) => {
             clearTimeout(loginTimeout);
@@ -365,7 +395,7 @@ function handleLoginAttempt(context: vscode.ExtensionContext, email: string, pas
 
 function handleLogout(context: vscode.ExtensionContext) {
     authToken = null;
-    context.globalState.update('devekAuthToken', null);
+    context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, null);
     if (ws) {
         clearInterval(pingInterval);
         ws.close();
@@ -389,23 +419,23 @@ function showMenu() {
             description: items[label],
             picked: label === 'View Status' && !!authToken
         }))
-    ).then(selection => {
+    ).then(async selection => {
         if (!selection) { 
             return; 
-        };
+        }
 
         switch (selection.label) {
             case 'View App':
-                vscode.commands.executeCommand('devek.showApp');
+                await showView();
                 break;
             case 'Logout':
-                vscode.commands.executeCommand('devek.logout');
+                vscode.commands.executeCommand(COMMANDS.LOGOUT);
                 break;
             case 'Reconnect':
-                vscode.commands.executeCommand('devek.reconnect');
+                vscode.commands.executeCommand(COMMANDS.RECONNECT);
                 break;
             case 'Learn More':
-                vscode.env.openExternal(vscode.Uri.parse('https://devek.dev'));
+                vscode.env.openExternal(vscode.Uri.parse(URLS.DOCS));
                 break;
             case 'View Status':
                 showConnectionStatus();
@@ -414,11 +444,12 @@ function showMenu() {
     });
 }
 
+
 function showConnectionStatus() {
     if (!authToken) {
         vscode.window.showInformationMessage('Not connected to Devek.dev', 'Login').then(selection => {
             if (selection === 'Login') {
-                vscode.commands.executeCommand('devek.login');
+                vscode.commands.executeCommand(COMMANDS.LOGIN);
             }
         });
         return;
@@ -430,43 +461,15 @@ function showConnectionStatus() {
     
     vscode.window.showInformationMessage(message, 'Reconnect', 'Logout').then(selection => {
         if (selection === 'Reconnect') {
-            vscode.commands.executeCommand('devek.reconnect');
+            vscode.commands.executeCommand(COMMANDS.RECONNECT);
         } else if (selection === 'Logout') {
-            vscode.commands.executeCommand('devek.logout');
+            vscode.commands.executeCommand(COMMANDS.LOGOUT);
         }
     });
 }
 
 function updateStatusBar(status: 'connected' | 'connecting' | 'disconnected' | 'error' | 'initializing') {
-    const statusMap = {
-        connected: {
-            text: '$(check) Devek.dev',
-            tooltip: 'Connected to Devek.dev - Click to view options',
-            command: 'devek.showMenu'
-        },
-        connecting: {
-            text: '$(loading~spin) Devek.dev',
-            tooltip: 'Connecting to Devek.dev...',
-            command: undefined
-        },
-        disconnected: {
-            text: '$(plug) Devek.dev',
-            tooltip: 'Click to login to Devek.dev',
-            command: 'devek.login'
-        },
-        error: {
-            text: '$(error) Devek.dev',
-            tooltip: 'Connection error - Click to retry',
-            command: 'devek.reconnect'
-        },
-        initializing: {
-            text: '$(loading~spin) Devek.dev',
-            tooltip: 'Initializing Devek.dev...',
-            command: undefined
-        }
-    };
-
-    const currentStatus = statusMap[status];
+    const currentStatus = STATUS_BAR_CONFIG.STATES[status.toUpperCase()];
     statusBarItem.text = currentStatus.text;
     statusBarItem.tooltip = currentStatus.tooltip;
     statusBarItem.command = currentStatus.command;
@@ -478,24 +481,21 @@ function showLoginPrompt() {
         'Please login to use Devek.dev',
         'Login',
         'Learn More'
-    ).then(selection => {
+    ).then(async selection => {
         if (selection === 'Login') {
-            vscode.commands.executeCommand('devek.login');
+            await showView();
         } else if (selection === 'Learn More') {
-            vscode.env.openExternal(vscode.Uri.parse('https://devek.dev'));
+            vscode.env.openExternal(vscode.Uri.parse(URLS.DOCS));
         }
     });
 }
-
 function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSocketMessage, loginCallback?: (success: boolean) => void) {
-    const wsUrl = process.env.DEVEK_WS_URL || 'wss://ws.devek.dev';
-    
     if (ws) {
         clearInterval(pingInterval);
         ws.close();
     }
 
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(URLS.WEBSOCKET);
     updateStatusBar('connecting');
 
     ws.on('open', () => {
@@ -515,7 +515,7 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
             } else {
                 clearInterval(pingInterval);
             }
-        }, 30000);
+        }, WEBSOCKET_CONFIG.PING_INTERVAL);
     });
 
     ws.on('message', (data) => {
@@ -537,14 +537,14 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
                     if (response.status === 'success') {
                         if (response.token) {
                             authToken = response.token;
-                            context.globalState.update('devekAuthToken', authToken);
+                            context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, authToken);
                             ws?.send(JSON.stringify({ type: 'auth', token: authToken }));
                         }
                     } else if (response.status === 'error') {
                         console.error('Server error:', response.message);
                         if (response.message?.includes('Authentication failed')) {
                             authToken = null;
-                            context.globalState.update('devekAuthToken', null);
+                            context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, null);
                             updateStatusBar('disconnected');
                             if (loginCallback) {
                                 loginCallback(false);
@@ -631,11 +631,11 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
 }
 
 function handleReconnection(context: vscode.ExtensionContext) {
-    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+    if (reconnectAttempts < WEBSOCKET_CONFIG.MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++;
         updateStatusBar('connecting');
         
-        const delay = RECONNECT_INTERVAL * Math.min(reconnectAttempts, 3); // Progressive backoff
+        const delay = WEBSOCKET_CONFIG.RECONNECT_INTERVAL * Math.min(reconnectAttempts, 3); // Progressive backoff
         setTimeout(() => {
             if (authToken) {
                 connectToWebSocket(context);
@@ -656,6 +656,19 @@ function handleReconnection(context: vscode.ExtensionContext) {
                 updateStatusBar('disconnected');
             }
         });
+    }
+}
+
+async function showView() {
+    try {
+        // Show/focus the sidebar first
+        await vscode.commands.executeCommand('workbench.view.extension.devek-sidebar');
+        
+        // Focus our specific view within the sidebar
+        await vscode.commands.executeCommand('devekViewContainer.focus');
+    } catch (error) {
+        console.error('Error showing view:', error);
+        vscode.window.showErrorMessage('Failed to open Devek.dev view');
     }
 }
 
