@@ -16,6 +16,7 @@ let authToken: string | null = null;
 let statusBarItem: vscode.StatusBarItem;
 let reconnectAttempts = 0;
 let pingInterval: any;
+let view: vscode.Webview | null;
 
 interface WebSocketMessage {
     type: string;
@@ -50,12 +51,12 @@ export function activate(context: vscode.ExtensionContext) {
             } else {
                 webviewView.webview.html = getLoginHtml();
             }
-
+            view = webviewView.webview;
             // Handle messages from the webview
             webviewView.webview.onDidReceiveMessage(async message => {
                 switch (message.command) {
                     case 'login':
-                        const success = await handleLoginAttempt(context, message.email, message.password);
+                        const success = await handleLoginAttempt(context);
                         if (success) {
                             webviewView.webview.html = getAppHtml();
                         } else {
@@ -187,60 +188,20 @@ function getLoginHtml() {
         <body>
             <div class="container">
                 <h2>Login to Devek.dev</h2>
-                <form id="loginForm" onsubmit="handleSubmit(event)">
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input 
-                            type="email" 
-                            id="email" 
-                            name="email" 
-                            required 
-                            autocomplete="email"
-                            spellcheck="false"
-                            autocapitalize="off"
-                        >
-                    </div>
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input 
-                            type="password" 
-                            id="password" 
-                            name="password" 
-                            required
-                            autocomplete="current-password"
-                        >
-                    </div>
-                    <div class="error" id="error-message"></div>
-                    <button type="submit" id="loginButton">Login</button>
-                </form>
+                <div class="error" id="error-message"></div>
+                <button type="submit" id="loginButton" onClick="handleSubmit()">Login</button>
                 <div class="register-link">
                     Not yet registered? <a href="#" onclick="register()">Register here</a>
                 </div>
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
-                const form = document.getElementById('loginForm');
                 const button = document.getElementById('loginButton');
                 const errorElement = document.getElementById('error-message');
                 
-                function handleSubmit(event) {
-                    event.preventDefault();
-                    
-                    const email = document.getElementById('email').value.trim();
-                    const password = document.getElementById('password').value;
-                    
-                    if (!email || !password) {
-                        showError('Please fill in all fields');
-                        return;
-                    }
-                    
-                    button.disabled = true;
-                    errorElement.style.display = 'none';
-                    
+                function handleSubmit() {
                     vscode.postMessage({
-                        command: 'login',
-                        email: email,
-                        password: password
+                        command: 'login'
                     });
                 }
 
@@ -255,9 +216,6 @@ function getLoginHtml() {
                     errorElement.style.display = 'block';
                     button.disabled = false;
                 }
-
-                // Focus email field on load
-                document.getElementById('email').focus();
 
                 window.addEventListener('message', event => {
                     const message = event.data;
@@ -302,7 +260,7 @@ function showLoginWebview(context: vscode.ExtensionContext) {
                     loginInProgress = true;
 
                     try {
-                        const success = await handleLoginAttempt(context, message.email, message.password);
+                        const success = await handleLoginAttempt(context);
                         if (success) {
                             panel.dispose();
                             showAppWebview(context);
@@ -379,7 +337,7 @@ function showAppWebview(_context: vscode.ExtensionContext) {
     panel.webview.html = getAppHtml();
 }
 
-function handleLoginAttempt(context: vscode.ExtensionContext, email: string, password: string): Promise<boolean> {
+function handleLoginAttempt(context: vscode.ExtensionContext): Promise<boolean> {
     return new Promise((resolve) => {
         updateStatusBar('connecting');
         
@@ -389,9 +347,9 @@ function handleLoginAttempt(context: vscode.ExtensionContext, email: string, pas
             updateStatusBar('disconnected');
         }, WEBSOCKET_CONFIG.TIMEOUT);
 
-        connectToWebSocket(context, { type: 'login', data: { email, password } }, (success) => {
+        connectToWebSocket(context, { type: 'plugin_login' }, (data) => {
             clearTimeout(loginTimeout);
-            resolve(success);
+            resolve(data);
         });
     });
 }
@@ -493,6 +451,12 @@ function showLoginPrompt() {
         }
     });
 }
+
+export function openUrl(url: string) {
+    const uri = vscode.Uri.parse(url);
+    vscode.env.openExternal(uri);
+  }
+
 function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSocketMessage, loginCallback?: (success: boolean) => void) {
     if (ws) {
         clearInterval(pingInterval);
@@ -536,7 +500,15 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
                 case 'pong':
                     console.log('Received pong:', response.data?.timestamp);
                     break;
-
+                case 'plugin_login':
+                    openUrl(response.data.url);
+                    break;
+                case 'plugin_auth':                    
+                    authToken = response.data.token;
+                    context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, authToken);
+                    view.html = getAppHtml();
+                    ws?.send(JSON.stringify({ type: 'auth', token: authToken }));
+                    break;
                 default:
                     if (response.status === 'success') {
                         if (response.token) {
