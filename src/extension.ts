@@ -29,7 +29,7 @@ interface WebSocketMessage {
 type StatusType = 'connected' | 'connecting' | 'disconnected' | 'error' | 'initializing';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Devek.dev is now active!');
+    console.log('Devek is now active!');
 
     // Create and register view container
     class DevekViewProvider implements vscode.WebviewViewProvider {
@@ -62,7 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
                         } else {
                             webviewView.webview.postMessage({ 
                                 type: 'error', 
-                                message: 'Invalid email or password' 
+                                message: 'Login attempt timed out' 
                             });
                         }
                         break;
@@ -267,7 +267,7 @@ function showLoginWebview(context: vscode.ExtensionContext) {
                         } else {
                             panel.webview.postMessage({ 
                                 type: 'error', 
-                                message: 'Invalid email or password' 
+                                message: 'Login attempt timed out'
                             });
                         }
                     } catch (error) {
@@ -311,7 +311,7 @@ function getAppHtml() {
             </style>
         </head>
         <body>
-            <iframe src="${URLS.APP}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+            <iframe src="${URLS.APP}?token=${authToken}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
         </body>
         </html>
     `;
