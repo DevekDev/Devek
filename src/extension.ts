@@ -506,7 +506,7 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
                 case 'plugin_auth':                    
                     authToken = response.data.token;
                     context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, authToken);
-                    view.html = getAppHtml();
+                    view!.html = getAppHtml();
                     ws?.send(JSON.stringify({ type: 'auth', token: authToken }));
                     break;
                 default:
