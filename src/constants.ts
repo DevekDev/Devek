@@ -23,7 +23,7 @@ export const WEBSOCKET_CONFIG = {
     MAX_RECONNECT_ATTEMPTS: 5,
     RECONNECT_INTERVAL: 5000, // in milliseconds
     PING_INTERVAL: 30000, // in milliseconds
-    TIMEOUT: 10000, // timeout for connection attempts in milliseconds
+    TIMEOUT: 300000, // timeout for connection attempts in milliseconds
 };
 
 /**
