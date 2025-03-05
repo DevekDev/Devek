@@ -23,14 +23,14 @@ Take control of your productivity with **Devek.dev**, a powerful VS Code extensi
 ## **Getting Started**
 
 1. **Install Devek.dev**:
-   - Search for "Devek.dev" in the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=devek-dev.devek-dev) and click "Install."
+    - Search for "Devek.dev" in the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=devek-dev.devek-dev) and click "Install."
 
 2. **Log in to your account**:
-   - Open the plugin in VS Code and log in using your account credentials.
-   - Don’t have an account yet? [Register here](https://app.devek.dev) to create one.
+    - Open the plugin in VS Code and log in using your account credentials.
+    - Don’t have an account yet? [Register here](https://app.devek.dev) to create one.
 
 3. **Analyze and Optimize**:
-   - Start coding and let Devek.dev provide actionable insights to enhance your workflow.
+    - Start coding and let Devek.dev provide actionable insights to enhance your workflow.
 
 ---
 
@@ -70,7 +70,7 @@ Want to tweak the tool to your liking? Here’s how you can set it up:
    ```
 
 3. Open in VS Code and run the extension:
-   - Press **F5** to launch a new VS Code session with Devek.dev activated.
+    - Press **F5** to launch a new VS Code session with Devek.dev activated.
 
 ---
 
@@ -78,22 +78,22 @@ Want to tweak the tool to your liking? Here’s how you can set it up:
 
 ### 0.0.8
 - **Now Open Source!**
-  - Customize and improve Devek.dev with the power of open collaboration.
+    - Customize and improve Devek.dev with the power of open collaboration.
 ---
 ### 0.0.6
 - **Bug Fixes and Performance Improvements**
-  - Enhanced stability and performance for smoother insights.
+    - Enhanced stability and performance for smoother insights.
 ---
 ### 0.0.5
 - **Initial Release**
-  - Track productivity.
-  - Optimize personal workflows.
+    - Track productivity.
+    - Optimize personal workflows.
 
 ---
 
 ## **Contributing**
 
-Want to contribute? Devek.dev is open-source and welcomes your input.  
+Want to contribute? Devek.dev is open-source and welcomes your input.
 
 - Report bugs or request features through [GitHub Issues](https://github.com/DevekDev/Devek/issues).
 - Submit pull requests to enhance functionality or fix bugs.
@@ -110,8 +110,18 @@ Devek.dev is licensed under the [MIT License](https://github.com/DevekDev/Devek/
 
 ## **Take the Next Step**
 
-Start using **Devek.dev** today to analyze, refine, and supercharge your development process.  
+Start using **Devek.dev** today to analyze, refine, and supercharge your development process.
 
 Feedback or ideas? We’d love to hear from you—help us make Devek.dev the ultimate productivity companion.
 
 **Level up with Devek.dev—work smarter, code better, and achieve more!**
+
+---
+
+## **Join Our Community!**
+
+Want to connect with other developers, share insights, and get support?  
+Join our **Devek.dev** Discord community!
+
+🔗 **[Join the Discord](https://discord.gg/xzbhyVfb)**
+
