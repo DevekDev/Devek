@@ -1,9 +1,9 @@
 {
   "name": "devek-dev",
-  "displayName": "Devek.dev",
+  "displayName": "Devek",
   "publisher": "devek-dev",
   "description": "Optimize Your Development Productivity Effortlessly",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "engines": {
     "vscode": "^1.70.0"
   },
@@ -25,7 +25,7 @@
       "activitybar": [
         {
           "id": "devek-sidebar",
-          "title": "Devek.dev",
+          "title": "Devek",
           "icon": "resources/activity-bar.png"
         }
       ]
@@ -35,7 +35,7 @@
         {
           "type": "webview",
           "id": "devekViewContainer",
-          "name": "Devek.dev"
+          "name": "Devek"
         }
       ]
     },

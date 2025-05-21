@@ -1,3 +1,4 @@
+import { SocketAddress } from 'net';
 import { StatusBarStatesConfig } from './types';
 
 /**
@@ -11,8 +12,8 @@ export const WEBVIEW_SETTINGS = {
         VIEW_CONTAINER: 'devekViewContainer'
     },
     TITLES: {
-        LOGIN: 'Devek.dev Login',
-        APP: 'Devek.dev'
+        LOGIN: 'Devek Login',
+        APP: 'Devek'
     }
 };
 
@@ -30,9 +31,9 @@ export const WEBSOCKET_CONFIG = {
  * Application URLs
  */
 export const URLS = {
-    APP: 'https://app.devek.dev',
-    WEBSOCKET: process.env.DEVEK_WS_URL || 'wss://ws.devek.dev',
-    DOCS: 'https://devek.dev'
+    APP: 'https://app.devek.ai',
+    WEBSOCKET: process.env.DEVEK_WS_URL || 'wss://ws.devek.ai',
+    DOCS: 'https://devek.ai'
 };
 
 /**
@@ -49,28 +50,28 @@ export const STATUS_BAR_CONFIG = {
     ALIGNMENT_PRIORITY: 100,
     STATES: {
         CONNECTED: {
-            text: '$(check) Devek.dev',
-            tooltip: 'Connected to Devek.dev - Click to view options',
+            text: '$(check) Devek',
+            tooltip: 'Connected to Devek - Click to view options',
             command: 'devek.showMenu'
         },
         CONNECTING: {
-            text: '$(loading~spin) Devek.dev',
-            tooltip: 'Connecting to Devek.dev...',
+            text: '$(loading~spin) Devek',
+            tooltip: 'Connecting to Devek...',
             command: undefined
         },
         DISCONNECTED: {
-            text: '$(plug) Devek.dev',
-            tooltip: 'Click to login to Devek.dev',
+            text: '$(plug) Devek',
+            tooltip: 'Click to login to Devek',
             command: 'devek.login'
         },
         ERROR: {
-            text: '$(error) Devek.dev',
+            text: '$(error) Devek',
             tooltip: 'Connection error - Click to retry',
             command: 'devek.reconnect'
         },
         INITIALIZING: {
-            text: '$(loading~spin) Devek.dev',
-            tooltip: 'Initializing Devek.dev...',
+            text: '$(loading~spin) Devek',
+            tooltip: 'Initializing Devek...',
             command: undefined
         }
     } as StatusBarStatesConfig

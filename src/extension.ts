@@ -187,7 +187,7 @@ function getLoginHtml() {
         </head>
         <body>
             <div class="container">
-                <h2>Login to Devek.dev</h2>
+                <h2>Login to Devek</h2>
                 <div class="error" id="error-message"></div>
                 <button type="submit" id="loginButton" onClick="handleSubmit()">Login</button>
                 <div class="register-link">
@@ -367,11 +367,11 @@ function handleLogout(context: vscode.ExtensionContext) {
 
 function showMenu() {
     const items: { [key: string]: string } = {
-        'View App': 'Open Devek.dev application',
+        'View App': 'Open Devek application',
         'View Status': authToken ? 'Connected' : 'Disconnected',
-        'Logout': 'Sign out from Devek.dev',
+        'Logout': 'Sign out from Devek',
         'Reconnect': 'Try reconnecting to server',
-        'Learn More': 'Visit Devek.dev documentation'
+        'Learn More': 'Visit Devek documentation'
     };
 
     vscode.window.showQuickPick(
@@ -408,7 +408,7 @@ function showMenu() {
 
 function showConnectionStatus() {
     if (!authToken) {
-        vscode.window.showInformationMessage('Not connected to Devek.dev', 'Login').then(selection => {
+        vscode.window.showInformationMessage('Not connected to Devek', 'Login').then(selection => {
             if (selection === 'Login') {
                 vscode.commands.executeCommand(COMMANDS.LOGIN);
             }
@@ -440,7 +440,7 @@ function updateStatusBar(status: StatusType) {
 
 function showLoginPrompt() {
     vscode.window.showInformationMessage(
-        'Please login to use Devek.dev',
+        'Please login to use Devek',
         'Login',
         'Learn More'
     ).then(async selection => {
@@ -621,7 +621,7 @@ function handleReconnection(context: vscode.ExtensionContext) {
         }, delay);
     } else {
         vscode.window.showErrorMessage(
-            'Failed to connect to Devek.dev. Would you like to try again?',
+            'Failed to connect to Devek. Would you like to try again?',
             'Retry',
             'Cancel'
         ).then(selection => {
@@ -644,7 +644,7 @@ async function showView() {
         await vscode.commands.executeCommand('devekViewContainer.focus');
     } catch (error) {
         console.error('Error showing view:', error);
-        vscode.window.showErrorMessage('Failed to open Devek.dev view');
+        vscode.window.showErrorMessage('Failed to open Devek view');
     }
 }
 

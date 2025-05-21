@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.12] - 2025-05-16
+### Changed
+- Renamed the project to Devek.
+- Moved the official site to devek.ai.
+
+
 All notable changes to this project will be documented in this file.
 
 ## [0.0.11] - 2025-02-16
