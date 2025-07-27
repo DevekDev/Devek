@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.13] - 2025-07-27
+### Fixed
+- Fixed "View provider for 'devekViewContainer' already registered" error in Windsurf
+- Improved WebSocket connection handling for Windsurf compatibility
+- Enhanced extension lifecycle management with proper cleanup on deactivation
+- Added defensive view provider registration to prevent duplicate registration errors
+- Better error handling and logging for WebSocket connections in different editors
+
 ## [0.0.12] - 2025-05-16
 ### Changed
 - Renamed the project to Devek.

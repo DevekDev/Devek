@@ -17,6 +17,7 @@ let statusBarItem: vscode.StatusBarItem;
 let reconnectAttempts = 0;
 let pingInterval: any;
 let view: vscode.Webview | null;
+let viewProvider: DevekViewProvider | null = null;
 
 interface WebSocketMessage {
     type: string;
@@ -28,80 +29,128 @@ interface WebSocketMessage {
 
 type StatusType = 'connected' | 'connecting' | 'disconnected' | 'error' | 'initializing';
 
+// Create and register view container
+class DevekViewProvider implements vscode.WebviewViewProvider {
+    public static readonly viewType = WEBVIEW_SETTINGS.IDENTIFIERS.VIEW_CONTAINER;
+    private context: vscode.ExtensionContext;
+
+    constructor(context: vscode.ExtensionContext) {
+        this.context = context;
+    }
+
+    resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        _context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken,
+    ): void | Thenable<void> {
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: []
+        };
+
+        // If logged in, show app, otherwise show login
+        if (authToken) {
+            webviewView.webview.html = getAppHtml();
+        } else {
+            webviewView.webview.html = getLoginHtml();
+        }
+        view = webviewView.webview;
+        // Handle messages from the webview
+        webviewView.webview.onDidReceiveMessage(async message => {
+            switch (message.command) {
+                case 'login':
+                    const success = await handleLoginAttempt(this.context);
+                    if (success) {
+                        webviewView.webview.html = getAppHtml();
+                    } else {
+                        webviewView.webview.postMessage({ 
+                            type: 'error', 
+                            message: 'Login attempt timed out' 
+                        });
+                    }
+                    break;
+                case 'register':
+                    vscode.env.openExternal(vscode.Uri.parse(URLS.APP));
+                    break;
+            }
+        });
+    }
+}
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('Devek is now active!');
 
-    // Create and register view container
-    class DevekViewProvider implements vscode.WebviewViewProvider {
-        public static readonly viewType = WEBVIEW_SETTINGS.IDENTIFIERS.VIEW_CONTAINER;
-
-        resolveWebviewView(
-            webviewView: vscode.WebviewView,
-            _context: vscode.WebviewViewResolveContext,
-            _token: vscode.CancellationToken,
-        ): void | Thenable<void> {
-            webviewView.webview.options = {
-                enableScripts: true,
-                localResourceRoots: []
-            };
-
-            // If logged in, show app, otherwise show login
-            if (authToken) {
-                webviewView.webview.html = getAppHtml();
-            } else {
-                webviewView.webview.html = getLoginHtml();
-            }
-            view = webviewView.webview;
-            // Handle messages from the webview
-            webviewView.webview.onDidReceiveMessage(async message => {
-                switch (message.command) {
-                    case 'login':
-                        const success = await handleLoginAttempt(context);
-                        if (success) {
-                            webviewView.webview.html = getAppHtml();
-                        } else {
-                            webviewView.webview.postMessage({ 
-                                type: 'error', 
-                                message: 'Login attempt timed out' 
-                            });
-                        }
-                        break;
-                    case 'register':
-                        vscode.env.openExternal(vscode.Uri.parse(URLS.APP));
-                        break;
-                }
-            });
-        }
-    }
-
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(DevekViewProvider.viewType, new DevekViewProvider())
-    );
-
+    // Initialize status bar first to provide immediate feedback
     statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Right, 
         STATUS_BAR_CONFIG.ALIGNMENT_PRIORITY
     );
     context.subscriptions.push(statusBarItem);
+    updateStatusBar('initializing');
 
-    context.subscriptions.push(
-        vscode.commands.registerCommand(COMMANDS.LOGIN, showView),  // Just use showView here
-        vscode.commands.registerCommand(COMMANDS.LOGOUT, () => handleLogout(context)),
-        vscode.commands.registerCommand(COMMANDS.RECONNECT, () => connectToWebSocket(context)),
-        vscode.commands.registerCommand(COMMANDS.SHOW_MENU, showMenu),
-        vscode.commands.registerCommand(COMMANDS.SHOW_APP, showView)
-    );
-
-    // Load saved token from storage
-    authToken = context.globalState.get(STORAGE_KEYS.AUTH_TOKEN) || null;
-    
-    // Initialize connection
-    if (authToken) {
-        connectToWebSocket(context);
-    } else {
-        updateStatusBar('disconnected');
-        showLoginPrompt();
+    // Defensive registration with enhanced error handling for Windsurf compatibility
+    try {
+        if (!viewProvider) {
+            viewProvider = new DevekViewProvider(context);
+        }
+        
+        // Check if view provider is already registered
+        const existingProvider = (vscode.window as any)._webviewViewProviders?.get?.(DevekViewProvider.viewType);
+        if (!existingProvider) {
+            context.subscriptions.push(
+                vscode.window.registerWebviewViewProvider(DevekViewProvider.viewType, viewProvider)
+            );
+            console.log('View provider registered successfully');
+        } else {
+            console.log('View provider already exists, skipping registration');
+        }
+    } catch (error) {
+        console.warn('View provider registration failed:', error);
+        // Continue with extension activation even if view registration fails
     }
+
+    // Register commands with error handling
+    try {
+        context.subscriptions.push(
+            vscode.commands.registerCommand(COMMANDS.LOGIN, showView),
+            vscode.commands.registerCommand(COMMANDS.LOGOUT, () => handleLogout(context)),
+            vscode.commands.registerCommand(COMMANDS.RECONNECT, () => connectToWebSocket(context)),
+            vscode.commands.registerCommand(COMMANDS.SHOW_MENU, showMenu),
+            vscode.commands.registerCommand(COMMANDS.SHOW_APP, showView)
+        );
+        console.log('Commands registered successfully');
+    } catch (error) {
+        console.error('Failed to register commands:', error);
+    }
+
+    // Load saved token from storage with error handling
+    try {
+        authToken = context.globalState.get(STORAGE_KEYS.AUTH_TOKEN) || null;
+        console.log('Auth token loaded:', authToken ? 'present' : 'not found');
+    } catch (error) {
+        console.error('Failed to load auth token:', error);
+        authToken = null;
+    }
+    
+    // Delay connection initialization to avoid race conditions
+    setTimeout(() => {
+        try {
+            if (authToken) {
+                console.log('Attempting WebSocket connection with existing token');
+                connectToWebSocket(context);
+            } else {
+                console.log('No auth token found, showing login prompt');
+                updateStatusBar('disconnected');
+                showLoginPrompt();
+            }
+        } catch (error) {
+            console.error('Failed to initialize connection:', error);
+            if (authToken) {
+                context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, null);
+            }
+            updateStatusBar('error');
+        }
+    }, 1000); // 1 second delay to ensure full activation
 }
 
 function getLoginHtml() {
@@ -458,32 +507,120 @@ export function openUrl(url: string) {
   }
 
 function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSocketMessage, loginCallback?: (success: boolean) => void) {
+    // Clean up existing connection
     if (ws) {
+        console.log('Cleaning up existing WebSocket connection');
         clearInterval(pingInterval);
-        ws.close();
+        ws.removeAllListeners(); // Remove all event listeners to prevent memory leaks
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+        }
+        ws = null;
     }
 
-    ws = new WebSocket(URLS.WEBSOCKET);
-    updateStatusBar('connecting');
+    // Log environment details for debugging
+    console.log('WebSocket connection attempt details:', {
+        environment: vscode.env.appName,
+        version: vscode.version,
+        target: URLS.WEBSOCKET,
+        userAgent: (global as any).navigator?.userAgent || 'N/A',
+        platform: process.platform,
+        nodeVersion: process.version,
+        hasAuthToken: !!authToken,
+        hasLoginData: !!loginData
+    });
+
+    let connectionTimeout: NodeJS.Timeout;
+    let isConnectionClosed = false;
+
+    try {
+        console.log(`Attempting WebSocket connection from ${vscode.env.appName} to ${URLS.WEBSOCKET}`);
+        updateStatusBar('connecting');
+        
+        // Create WebSocket with enhanced error handling
+        ws = new WebSocket(URLS.WEBSOCKET, {
+            handshakeTimeout: 15000, // 15 second handshake timeout
+            perMessageDeflate: false, // Disable compression for compatibility
+        });
+        
+        // Set a connection timeout for Windsurf compatibility
+        connectionTimeout = setTimeout(() => {
+            if (ws && ws.readyState === WebSocket.CONNECTING && !isConnectionClosed) {
+                console.warn('WebSocket connection timeout - closing connection');
+                isConnectionClosed = true;
+                ws.close();
+                updateStatusBar('error');
+                if (loginCallback) {
+                    loginCallback(false);
+                }
+                // Show user-friendly error message
+                vscode.window.showWarningMessage(
+                    'Devek: Connection timeout. Please check your internet connection and try again.',
+                    'Retry'
+                ).then(selection => {
+                    if (selection === 'Retry') {
+                        setTimeout(() => connectToWebSocket(context, loginData, loginCallback), 2000);
+                    }
+                });
+            }
+        }, 15000); // 15 second timeout
+        
+    } catch (error) {
+        console.error('Failed to create WebSocket connection:', error);
+        updateStatusBar('error');
+        if (loginCallback) {
+            loginCallback(false);
+        }
+        
+        // Show user-friendly error message
+        vscode.window.showErrorMessage(
+            `Devek: Failed to establish connection. ${error instanceof Error ? error.message : 'Unknown error'}`,
+            'Retry'
+        ).then(selection => {
+            if (selection === 'Retry') {
+                setTimeout(() => connectToWebSocket(context, loginData, loginCallback), 3000);
+            }
+        });
+        return;
+    }
 
     ws.on('open', () => {
         console.log('Connected to WebSocket server');
+        clearTimeout(connectionTimeout); // Clear the connection timeout
+        isConnectionClosed = false;
         reconnectAttempts = 0;
+        // Don't set status to 'connected' yet - wait for successful authentication
+        updateStatusBar('connecting'); // Keep showing connecting until auth succeeds
         
-        if (authToken) {
-            ws?.send(JSON.stringify({ type: 'auth', token: authToken }));
-        } else if (loginData) {
-            ws?.send(JSON.stringify(loginData));
-        }
-
-        // Start ping interval
-        pingInterval = setInterval(() => {
-            if (ws?.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'ping' }));
-            } else {
-                clearInterval(pingInterval);
+        try {
+            if (authToken) {
+                console.log('Sending auth token to server');
+                ws?.send(JSON.stringify({ type: 'auth', token: authToken }));
+            } else if (loginData) {
+                console.log('Sending login data to server');
+                ws?.send(JSON.stringify(loginData));
             }
-        }, WEBSOCKET_CONFIG.PING_INTERVAL);
+
+            // Start ping interval with error handling
+            pingInterval = setInterval(() => {
+                if (ws?.readyState === WebSocket.OPEN && !isConnectionClosed) {
+                    try {
+                        ws.send(JSON.stringify({ type: 'ping' }));
+                    } catch (error) {
+                        console.error('Failed to send ping:', error);
+                        clearInterval(pingInterval);
+                    }
+                } else {
+                    clearInterval(pingInterval);
+                }
+            }, WEBSOCKET_CONFIG.PING_INTERVAL);
+        } catch (error) {
+            console.error('Error in WebSocket open handler:', error);
+            updateStatusBar('error');
+            if (loginCallback) {
+                loginCallback(false);
+            }
+        }
     });
 
     ws.on('message', (data) => {
@@ -491,9 +628,17 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
             const response = JSON.parse(data.toString());
             switch (response.type) {
                 case 'init':
-                    updateStatusBar('connected');
+                    console.log('Received init message from server');
+                    // Only set connected if we have a valid auth token
+                    if (authToken) {
+                        updateStatusBar('connected');
+                        console.log('Authenticated and connected successfully');
+                    } else {
+                        updateStatusBar('disconnected');
+                        console.log('Connected but not authenticated');
+                    }
                     if (loginCallback) {
-                        loginCallback(true);
+                        loginCallback(!!authToken);
                     }
                     break;
 
@@ -511,21 +656,39 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
                     break;
                 default:
                     if (response.status === 'success') {
+                        console.log('Authentication successful');
+                        updateStatusBar('connected'); // Only set connected after successful auth
                         if (response.token) {
                             authToken = response.token;
                             context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, authToken);
                             ws?.send(JSON.stringify({ type: 'auth', token: authToken }));
                         }
+                        if (loginCallback) {
+                            loginCallback(true);
+                        }
                     } else if (response.status === 'error') {
                         console.error('Server error:', response.message);
-                        if (response.message?.includes('Authentication failed')) {
+                        updateStatusBar('error');
+                        
+                        // Handle different types of authentication errors
+                        if (response.message?.includes('Invalid token') || response.message?.includes('Authentication failed')) {
+                            console.log('Token is invalid, clearing stored token');
                             authToken = null;
                             context.globalState.update(STORAGE_KEYS.AUTH_TOKEN, null);
                             updateStatusBar('disconnected');
+                            
                             if (loginCallback) {
                                 loginCallback(false);
                             }
-                            vscode.window.showErrorMessage('Authentication failed. Please log in again.');
+                            
+                            // Use existing login prompt function
+                            showLoginPrompt();
+                        } else {
+                            // Other server errors
+                            if (loginCallback) {
+                                loginCallback(false);
+                            }
+                            vscode.window.showErrorMessage(`Devek: Server error - ${response.message}`);
                         }
                     }
             }
@@ -542,20 +705,104 @@ function connectToWebSocket(context: vscode.ExtensionContext, loginData?: WebSoc
 
     ws.on('error', (error) => {
         console.error('WebSocket error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            code: (error as any).code,
+            type: (error as any).type,
+            target: (error as any).target?.url,
+            readyState: ws?.readyState,
+            environment: vscode.env.appName,
+            isConnectionClosed
+        });
+        
+        clearTimeout(connectionTimeout);
         clearInterval(pingInterval);
+        isConnectionClosed = true;
         updateStatusBar('error');
+        
+        // Handle specific error types
+        const errorMessage = error.message || 'Unknown error';
+        
+        if (errorMessage.includes('closed before the connection was established')) {
+            console.warn('WebSocket closed prematurely - this may be a Windsurf-specific network restriction');
+            // Don't show popup immediately, wait to see if it's a transient issue
+            setTimeout(() => {
+                if (isConnectionClosed && ws?.readyState !== WebSocket.OPEN) {
+                    vscode.window.showWarningMessage(
+                        'Devek: Connection failed. This may be due to network restrictions.',
+                        'Retry',
+                        'Learn More'
+                    ).then(selection => {
+                        if (selection === 'Retry') {
+                            setTimeout(() => connectToWebSocket(context, loginData, loginCallback), 2000);
+                        } else if (selection === 'Learn More') {
+                            vscode.env.openExternal(vscode.Uri.parse('https://devek.ai/docs/troubleshooting'));
+                        }
+                    });
+                }
+            }, 3000);
+        } else if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND')) {
+            console.warn('Connection refused or DNS resolution failed');
+            vscode.window.showErrorMessage(
+                'Devek: Unable to connect to server. Please check your internet connection.',
+                'Retry'
+            ).then(selection => {
+                if (selection === 'Retry') {
+                    setTimeout(() => connectToWebSocket(context, loginData, loginCallback), 5000);
+                }
+            });
+        } else {
+            console.warn('Generic WebSocket error occurred');
+        }
+        
         if (loginCallback) {
             loginCallback(false);
         }
-        handleReconnection(context);
+        
+        // Only attempt automatic reconnection for certain error types
+        if (!errorMessage.includes('closed before the connection was established') && 
+            !errorMessage.includes('ECONNREFUSED') && 
+            reconnectAttempts < 3) {
+            console.log('Attempting automatic reconnection...');
+            handleReconnection(context);
+        }
     });
 
-    ws.on('close', () => {
-        console.log('Disconnected from WebSocket server');
+    ws.on('close', (code, reason) => {
+        console.log('Disconnected from WebSocket server', { code, reason: reason?.toString() });
+        clearTimeout(connectionTimeout);
         clearInterval(pingInterval);
-        if (authToken) {
-            updateStatusBar('error');
-            handleReconnection(context);
+        isConnectionClosed = true;
+        
+        // Handle different close codes
+        if (code === 1000) {
+            // Normal closure
+            console.log('WebSocket closed normally');
+            updateStatusBar('disconnected');
+        } else if (code === 1006) {
+            // Abnormal closure (connection lost)
+            console.log('WebSocket connection lost abnormally');
+            if (authToken && reconnectAttempts < 3) {
+                updateStatusBar('error');
+                handleReconnection(context);
+            } else {
+                updateStatusBar('disconnected');
+            }
+        } else {
+            // Other closure codes
+            console.log(`WebSocket closed with code: ${code}`);
+            if (authToken) {
+                updateStatusBar('error');
+                if (reconnectAttempts < 3) {
+                    handleReconnection(context);
+                }
+            } else {
+                updateStatusBar('disconnected');
+            }
+        }
+        
+        if (loginCallback) {
+            loginCallback(false);
         }
     });
 
@@ -649,9 +896,54 @@ async function showView() {
 }
 
 export function deactivate() {
-    if (ws) {
-        clearInterval(pingInterval);
-        ws.close();
-        console.log('WebSocket connection closed');
+    console.log('Deactivating Devek extension...');
+    
+    try {
+        // Clean up WebSocket connection with comprehensive cleanup
+        if (ws) {
+            console.log('Cleaning up WebSocket connection...');
+            clearInterval(pingInterval);
+            
+            // Remove all event listeners to prevent memory leaks
+            ws.removeAllListeners();
+            
+            // Close connection if still open
+            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                ws.close(1000, 'Extension deactivating');
+            }
+            
+            ws = null;
+            console.log('WebSocket connection cleaned up');
+        }
+        
+        // Clean up status bar
+        if (statusBarItem) {
+            statusBarItem.dispose();
+            console.log('Status bar item disposed');
+        }
+        
+        // Clean up view provider reference
+        if (viewProvider) {
+            viewProvider = null;
+            console.log('View provider reference cleared');
+        }
+        
+        // Clean up view reference
+        if (view) {
+            view = null;
+            console.log('View reference cleared');
+        }
+        
+        // Reset all state variables
+        authToken = null;
+        reconnectAttempts = 0;
+        pingInterval = null;
+        
+        console.log('All extension state reset');
+        
+    } catch (error) {
+        console.error('Error during extension deactivation:', error);
     }
+    
+    console.log('Devek extension deactivated successfully');
 }
